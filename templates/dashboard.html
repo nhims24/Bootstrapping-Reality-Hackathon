@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CityVision AI - Traffic Intelligence Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/@elevenlabs/convai-widget-embed" async type="text/javascript"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #243508;
+            color: #fff;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            animation: fadeInDown 0.8s ease;
+        }
+
+        .header h1 {
+            font-size: 3em;
+            color: #f3d9d9;
+            text-shadow: 0 0 30px rgba(0, 255, 255, 0.5);
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .control-panel {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            animation: fadeIn 1s ease;
+        }
+
+        .control-row {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+        }
+
+        .input-group {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: none;
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+            font-size: 14px;
+        }
+
+        .btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: rgb(153, 255, 236);
+            color: #333;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 255, 255, 0.4);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.2);
+            color: #fff;
+            padding: 10px 20px;
+            margin-bottom: 15px;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            animation: fadeInUp 0.8s ease;
+        }
+
+        .card h3 {
+            font-size: 1.2em;
+            margin-bottom: 15px;
+            color: #00ffff;
+        }
+
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .metric-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #00ffff;
+        }
+
+        .metric-label {
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 6px 15px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+
+        .status-analyzing {
+            background: #ffd700;
+            color: #333;
+            animation: pulse 2s infinite;
+        }
+
+        .status-complete {
+            background: #00ff88;
+            color: #333;
+        }
+
+        .status-idle {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-top: 20px;
+        }
+
+        .alerts-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .alert-item {
+            background: rgba(255, 0, 0, 0.2);
+            border-left: 4px solid #ff4444;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            animation: slideIn 0.5s ease;
+        }
+
+        .alert-item.warning {
+            background: rgba(255, 165, 0, 0.2);
+            border-left-color: #ffa500;
+        }
+
+        .alert-item.info {
+            background: rgba(0, 255, 255, 0.2);
+            border-left-color: #00ffff;
+        }
+
+        .hotspot-item {
+            background: rgba(255, 0, 0, 0.15);
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border-left: 4px solid #ff0000;
+        }
+
+        .hotspot-severity {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+
+        .severity-critical {
+            background: #ff0000;
+            color: #fff;
+        }
+
+        .severity-high {
+            background: #ff6600;
+            color: #fff;
+        }
+
+        .severity-medium {
+            background: #ffa500;
+            color: #333;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 30px;
+            font-size: 1.2em;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid #00ffff;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        /* Voice Agent Styles */
+        .agent-section {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .agent-section h3 {
+            color: #00ffff;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+
+        .agent-instructions {
+            background: rgba(0, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #00ffff;
+            font-size: 0.95em;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .forecast-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .forecast-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .forecast-time {
+            font-size: 0.85em;
+            opacity: 0.8;
+            margin-bottom: 5px;
+        }
+
+        .forecast-value {
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+
+        .congestion-low { color: #00ff88; }
+        .congestion-medium { color: #ffa500; }
+        .congestion-high { color: #ff4444; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1> CityVision AI</h1>
+        <p>Real-time Traffic Intelligence with Predictive Analytics & Voice Agent</p>
+    </div>
+
+    <div class="container">
+        <!-- Control Panel -->
+        <div class="control-panel">
+            <h3 style="margin-bottom: 20px;">🎬 Analysis Controls</h3>
+            <div class="control-row">
+                <div class="input-group">
+                    <label>Video Path</label>
+                    <input type="text" id="videoPath" placeholder="/path/to/traffic/video.mp4">
+                </div>
+                <div class="input-group">
+                    <label>OpenAI API Key</label>
+                    <input type="password" id="apiKey" placeholder="sk-...">
+                </div>
+                <div class="input-group">
+                    <label>Sample Interval</label>
+                    <input type="number" id="sampleInterval" value="30" min="10" max="120">
+                </div>
+                <button class="btn btn-primary" id="startBtn" onclick="startAnalysis()">
+                    🚀 Start Analysis
+                </button>
+            </div>
+        </div>
+
+        <!-- Main Metrics -->
+        <div class="dashboard-grid">
+            <div class="card">
+                <h3>📊 Current Metrics</h3>
+                <div class="metric">
+                    <div>
+                        <div class="metric-label">Vehicles</div>
+                        <div class="metric-value" id="vehicleCount">0</div>
+                    </div>
+                </div>
+                <div class="metric">
+                    <div>
+                        <div class="metric-label">Pedestrians</div>
+                        <div class="metric-value" id="pedestrianCount">0</div>
+                    </div>
+                </div>
+                <div class="metric">
+                    <div>
+                        <div class="metric-label">Congestion</div>
+                        <div class="metric-value" id="congestionValue">0%</div>
+                    </div>
+                </div>
+                <div style="margin-top: 15px;">
+                    <span class="metric-label">Status: </span>
+                    <span class="status status-idle" id="status">Idle</span>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>📈 30-Min Congestion Forecast</h3>
+                <div class="chart-container">
+                    <canvas id="forecastChart"></canvas>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>🚨 Accident Hotspots</h3>
+                <div id="hotspotsList" class="alerts-list">
+                    <div class="loading">No hotspots detected yet</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>⚡ Quick Forecast</h3>
+                <div class="forecast-grid" id="quickForecast">
+                    <div class="forecast-item">
+                        <div class="forecast-time">5 min</div>
+                        <div class="forecast-value">--</div>
+                    </div>
+                    <div class="forecast-item">
+                        <div class="forecast-time">10 min</div>
+                        <div class="forecast-value">--</div>
+                    </div>
+                    <div class="forecast-item">
+                        <div class="forecast-time">15 min</div>
+                        <div class="forecast-value">--</div>
+                    </div>
+                    <div class="forecast-item">
+                        <div class="forecast-time">20 min</div>
+                        <div class="forecast-value">--</div>
+                    </div>
+                    <div class="forecast-item">
+                        <div class="forecast-time">25 min</div>
+                        <div class="forecast-value">--</div>
+                    </div>
+                    <div class="forecast-item">
+                        <div class="forecast-time">30 min</div>
+                        <div class="forecast-value">--</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recommendations -->
+        <div class="card">
+            <h3>💡 AI Recommendations & Signal Optimization</h3>
+            <div id="recommendations">
+                <div class="loading">Run analysis to get recommendations...</div>
+            </div>
+        </div>
+
+        <!-- Detailed Alerts -->
+        <div class="card">
+            <h3>⚠️ Real-time Alerts</h3>
+            <div id="alertsList" class="alerts-list">
+                <div class="loading">No alerts yet</div>
+            </div>
+        </div>
+
+        <!-- Voice Agent Section -->
+        <div class="agent-section">
+            <h3>🎙️ Talk to the Traffic Analysis Agent</h3>
+            <div class="agent-instructions">
+                <strong>How to use:</strong> 
+                <br>1. Run an analysis first (or the agent will tell you no data is available)
+                <br>2. Click "Copy Agent Context" to copy the analysis data
+                <br>3. Click the microphone in the agent widget below
+                <br>4. Paste the context as your first message
+                <br>5. Ask questions about traffic patterns, recommendations, and predictions!
+            </div>
+            <button class="btn btn-secondary" id="copyContextBtn" onclick="copyAgentContext()">
+                📋 Copy Agent Context
+            </button>
+            <elevenlabs-convai agent-id="agent_7101k7wzjb3vfrnvqdma7zp0p1qj"></elevenlabs-convai>
+        </div>
+    </div>
+
+    <script>
+        let forecastChart = null;
+        let updateInterval = null;
+        let isAnalyzing = false;
+        const API_BASE = 'http://localhost:5010';
+
+        // Test server connection on load
+        async function testConnection() {
+            try {
+                const response = await fetch(`${API_BASE}/api/test`);
+                const data = await response.json();
+                if (data.status === 'ok') {
+                    console.log('✅ Server connected:', data.message);
+                    addAlert('Server connected successfully!', 'info');
+                    return true;
+                }
+            } catch (error) {
+                console.error('❌ Server connection failed:', error);
+                addAlert('⚠️ Cannot connect to server. Make sure Flask is running on port 5001!', 'warning');
+                document.getElementById('startBtn').disabled = true;
+                return false;
+            }
+        }
+
+        // Initialize forecast chart
+        function initForecastChart() {
+            const ctx = document.getElementById('forecastChart').getContext('2d');
+            forecastChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Predicted Congestion %',
+                        data: [],
+                        borderColor: '#00ffff',
+                        backgroundColor: 'rgba(0, 255, 255, 0.1)',
+                        borderWidth: 3,
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: { color: '#fff' }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: { color: '#fff' },
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                        },
+                        x: {
+                            ticks: { color: '#fff' },
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Copy agent context
+        async function copyAgentContext() {
+            try {
+                const response = await fetch(`${API_BASE}/api/agent-context`);
+                const data = await response.json();
+                
+                if (data.context) {
+                    await navigator.clipboard.writeText(data.context);
+                    
+                    const btn = document.getElementById('copyContextBtn');
+                    btn.textContent = '✅ Copied! Paste in agent';
+                    btn.style.background = 'rgba(0, 255, 136, 0.3)';
+                    
+                    addAlert('✅ Context copied! Paste it in the voice agent to start.', 'info');
+                    
+                    setTimeout(() => {
+                        btn.textContent = '📋 Copy Agent Context';
+                        btn.style.background = 'rgba(255, 255, 255, 0.2)';
+                    }, 3000);
+                } else {
+                    addAlert('⚠️ No analysis data available yet. Run an analysis first!', 'warning');
+                }
+            } catch (error) {
+                console.error('Error copying context:', error);
+                addAlert('❌ Failed to copy context: ' + error.message, 'warning');
+            }
+        }
+
+        async function startAnalysis() {
+            const videoPath = document.getElementById('videoPath').value;
+            const apiKey = document.getElementById('apiKey').value;
+            const sampleInterval = parseInt(document.getElementById('sampleInterval').value);
+
+            if (!videoPath) {
+                alert('❌ Please enter a video path');
+                return;
+            }
+
+            if (!apiKey) {
+                alert('❌ Please enter your OpenAI API key');
+                return;
+            }
+
+            const startBtn = document.getElementById('startBtn');
+            startBtn.disabled = true;
+            startBtn.textContent = '⏳ Starting...';
+
+            const requestData = {
+                video_path: videoPath,
+                api_key: apiKey,
+                sample_interval: sampleInterval
+            };
+
+            try {
+                const response = await fetch(`${API_BASE}/api/analyze`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(requestData)
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.error || `HTTP ${response.status}`);
+                }
+                
+                if (result.status === 'started') {
+                    document.getElementById('status').textContent = 'Analyzing';
+                    document.getElementById('status').className = 'status status-analyzing';
+                    isAnalyzing = true;
+                    startBtn.textContent = '⏳ Analyzing...';
+                    
+                    // Start polling for updates
+                    updateInterval = setInterval(updateDashboard, 2000);
+                    
+                    addAlert('✅ Analysis started successfully!', 'info');
+                } else {
+                    throw new Error(result.error || 'Unknown error');
+                }
+            } catch (error) {
+                alert('❌ Error: ' + error.message);
+                startBtn.disabled = false;
+                startBtn.textContent = '🚀 Start Analysis';
+                isAnalyzing = false;
+                
+                addAlert(`Failed to start: ${error.message}`, 'warning');
+            }
+        }
+
+        async function updateDashboard() {
+            try {
+                const metricsResponse = await fetch(`${API_BASE}/api/metrics`);
+                
+                if (!metricsResponse.ok) {
+                    throw new Error('Failed to fetch metrics');
+                }
+                
+                const metrics = await metricsResponse.json();
+
+                document.getElementById('vehicleCount').textContent = metrics.vehicles || 0;
+                document.getElementById('pedestrianCount').textContent = metrics.pedestrians || 0;
+                document.getElementById('congestionValue').textContent = `${metrics.congestion || 0}%`;
+
+                if (metrics.status === 'complete') {
+                    document.getElementById('status').textContent = 'Complete';
+                    document.getElementById('status').className = 'status status-complete';
+                    document.getElementById('startBtn').disabled = false;
+                    document.getElementById('startBtn').textContent = '🚀 Start Analysis';
+                    clearInterval(updateInterval);
+                    isAnalyzing = false;
+
+                    addAlert('✅ Analysis complete! You can now use the voice agent.', 'info');
+                    
+                    await loadPredictions();
+                }
+
+                const congestionEl = document.getElementById('congestionValue');
+                const congestion = metrics.congestion || 0;
+                if (congestion > 70) {
+                    congestionEl.className = 'metric-value congestion-high';
+                } else if (congestion > 40) {
+                    congestionEl.className = 'metric-value congestion-medium';
+                } else {
+                    congestionEl.className = 'metric-value congestion-low';
+                }
+
+            } catch (error) {
+                console.error('Error updating dashboard:', error);
+            }
+        }
+
+        async function loadPredictions() {
+            try {
+                const predResponse = await fetch(`${API_BASE}/api/predictions`);
+                
+                if (!predResponse.ok) {
+                    console.warn('Predictions not available yet');
+                    return;
+                }
+                
+                const predictions = await predResponse.json();
+
+                if (predictions.congestion_forecast && predictions.congestion_forecast.length > 0) {
+                    updateForecastChart(predictions.congestion_forecast);
+                    updateQuickForecast(predictions.congestion_forecast);
+                }
+
+                if (predictions.accident_hotspots && predictions.accident_hotspots.length > 0) {
+                    updateHotspots(predictions.accident_hotspots);
+                }
+
+                if (predictions.signal_optimization) {
+                    updateRecommendations(predictions);
+                }
+
+            } catch (error) {
+                console.error('Error loading predictions:', error);
+            }
+        }
+
+        function updateForecastChart(forecast) {
+            if (!forecastChart) return;
+
+            const labels = forecast.map(f => `${f.time_offset_minutes} min`);
+            const data = forecast.map(f => f.predicted_congestion);
+
+            forecastChart.data.labels = labels;
+            forecastChart.data.datasets[0].data = data;
+            forecastChart.update();
+        }
+
+        function updateQuickForecast(forecast) {
+            const container = document.getElementById('quickForecast');
+            const intervals = [4, 9, 14, 19, 24, 29];
+
+            let html = '';
+            intervals.forEach((idx, i) => {
+                if (forecast[idx]) {
+                    const value = Math.round(forecast[idx].predicted_congestion);
+                    let colorClass = 'congestion-low';
+                    if (value > 70) colorClass = 'congestion-high';
+                    else if (value > 40) colorClass = 'congestion-medium';
+
+                    html += `
+                        <div class="forecast-item">
+                            <div class="forecast-time">${(i + 1) * 5} min</div>
+                            <div class="forecast-value ${colorClass}">${value}%</div>
+                        </div>
+                    `;
+                }
+            });
+
+            container.innerHTML = html;
+        }
+
+        function updateHotspots(hotspots) {
+            const container = document.getElementById('hotspotsList');
+            
+            let html = '';
+            hotspots.forEach((hotspot, idx) => {
+                html += `
+                    <div class="hotspot-item">
+                        <strong>Hotspot ${idx + 1}</strong>
+                        <span class="hotspot-severity severity-${hotspot.severity}">
+                            ${hotspot.severity.toUpperCase()}
+                        </span>
+                        <div style="margin-top: 8px; opacity: 0.9;">
+                            ${hotspot.location}
+                        </div>
+                        <div style="margin-top: 5px; font-size: 0.9em;">
+                            Risk Score: <strong>${hotspot.risk_score}</strong>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html || '<div class="loading">No hotspots detected</div>';
+        }
+
+        function updateRecommendations(predictions) {
+            const container = document.getElementById('recommendations');
+            const signal = predictions.signal_optimization;
+
+            let html = '<div style="padding: 15px; background: rgba(0, 255, 136, 0.1); border-radius: 8px; border-left: 4px solid #00ff88;">';
+            
+            if (signal) {
+                html += `
+                    <h4 style="color: #00ff88; margin-bottom: 10px;">🚦 Signal Timing Optimization</h4>
+                    <p><strong>Current Avg Congestion:</strong> ${signal.current_avg_congestion}%</p>
+                    <p><strong>Optimal Green Duration:</strong> ${signal.optimal_green_duration}s</p>
+                    <p><strong>Recommendation:</strong> ${signal.recommendation}</p>
+                    <p><strong>Expected Improvement:</strong> ${signal.expected_improvement}</p>
+                `;
+            }
+
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function addAlert(message, type = 'info') {
+            const container = document.getElementById('alertsList');
+            
+            if (container.querySelector('.loading')) {
+                container.innerHTML = '';
+            }
+
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert-item ${type}`;
+            alertDiv.innerHTML = `
+                <div style="font-weight: 600; margin-bottom: 5px;">
+                    ${type === 'info' ? '💡' : type === 'warning' ? '⚠️' : '🚨'} 
+                    ${type.toUpperCase()}
+                </div>
+                <div>${message}</div>
+                <div style="font-size: 0.85em; opacity: 0.7; margin-top: 5px;">
+                    ${new Date().toLocaleTimeString()}
+                </div>
+            `;
+            
+            container.insertBefore(alertDiv, container.firstChild);
+
+            while (container.children.length > 10) {
+                container.removeChild(container.lastChild);
+            }
+        }
+
+        // Initialize
+        window.onload = async function() {
+            console.log('🚀 Dashboard loading...');
+            initForecastChart();
+            
+            const connected = await testConnection();
+            
+            if (connected) {
+                updateDashboard();
+            }
+        };
+    </script>
+</body>
+</html>
