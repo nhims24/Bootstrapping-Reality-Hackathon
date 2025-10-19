@@ -1,595 +1,848 @@
-#!/usr/bin/env python3
-"""
-Smart Traffic Light Analyzer with OpenAI Vision API
-Analyzes MP4 traffic footage using AI for accurate detection and recommendations
-"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CityVision AI - Traffic Intelligence Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/@elevenlabs/convai-widget-embed" async type="text/javascript"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-import cv2
-import numpy as np
-from datetime import datetime
-import json
-import base64
-import os
-from collections import defaultdict
-from openai import OpenAI
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #243508;
+            color: #fff;
+            min-height: 100vh;
+            padding: 20px;
+        }
 
-class TrafficAnalyzer:
-    def __init__(self, video_path, openai_api_key=None):
-        self.video_path = video_path
-        self.cap = cv2.VideoCapture(video_path)
-        self.fps = int(self.cap.get(cv2.CAP_PROP_FPS))
-        self.total_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        self.duration = self.total_frames / self.fps if self.fps > 0 else 0
-        
-        # Initialize OpenAI
-        self.openai_api_key = openai_api_key or os.getenv('OPENAI_API_KEY')
-        if not self.openai_api_key:
-            raise ValueError("OpenAI API key is required. Set OPENAI_API_KEY environment variable or pass it as parameter.")
-        self.client = OpenAI(api_key=self.openai_api_key)
-        
-        # Analysis storage
-        self.frame_analyses = []
-        self.vehicle_count = 0
-        self.pedestrian_count = 0
-        self.congestion_levels = []
-        
-    def encode_frame_to_base64(self, frame):
-        """Encode frame to base64 for OpenAI API"""
-        _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
-        return base64.b64encode(buffer).decode('utf-8')
-    
-    def analyze_frame_with_ai(self, frame, frame_number, timestamp):
-        """Use OpenAI Vision API to analyze traffic frame"""
-        try:
-            base64_image = self.encode_frame_to_base64(frame)
-            
-            response = self.client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": """You are a traffic engineering expert. Analyze this traffic scene in detail and provide a comprehensive assessment.
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            animation: fadeInDown 0.8s ease;
+        }
 
-Count and identify:
-1. Total number of vehicles (cars, trucks, buses, motorcycles) - be precise
-2. Total number of pedestrians visible
-3. Traffic density level (0-100% scale)
+        .header h1 {
+            font-size: 3em;
+            color: #f3d9d9;
+            text-shadow: 0 0 30px rgba(0, 255, 255, 0.5);
+            margin-bottom: 10px;
+        }
 
-Assess traffic conditions:
-4. Current traffic flow status (flowing, slow, congested, gridlocked)
-5. Lane usage and distribution
-6. Any bottlenecks or problem areas visible
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
 
-Safety observations:
-7. Any unsafe behaviors (jaywalking, aggressive driving, running red lights)
-8. Visibility issues (poor lighting, obstructions, faded markings)
-9. Pedestrian safety concerns
-10. Accident risk factors
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
 
-Infrastructure assessment:
-11. Road condition and quality
-12. Traffic signal visibility and placement
-13. Road marking quality
-14. Signage adequacy
-15. Pedestrian crossing facilities
+        .control-panel {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            animation: fadeIn 1s ease;
+        }
 
-Specific recommendations:
-16. Immediate safety improvements needed
-17. Traffic flow optimization suggestions
-18. Infrastructure upgrades required
-19. Signal timing adjustments needed
+        .control-row {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+        }
 
-Provide response in JSON format:
-{
-  "vehicle_count": number,
-  "vehicle_types": {"cars": X, "trucks": X, "buses": X, "motorcycles": X},
-  "pedestrian_count": number,
-  "congestion_percent": number (0-100),
-  "traffic_flow": "flowing/slow/congested/gridlocked",
-  "lane_usage": "description",
-  "safety_issues": ["issue1", "issue2"],
-  "visibility_problems": ["problem1", "problem2"],
-  "infrastructure_issues": ["issue1", "issue2"],
-  "immediate_actions": ["action1", "action2"],
-  "recommendations": ["rec1", "rec2"],
-  "risk_level": "low/medium/high/critical",
-  "notes": "additional observations"
-}"""
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{base64_image}",
-                                    "detail": "high"
-                                }
-                            }
-                        ]
+        .input-group {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: none;
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+            font-size: 14px;
+        }
+
+        .btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: rgb(153, 255, 236);
+            color: #333;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 255, 255, 0.4);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.2);
+            color: #fff;
+            padding: 10px 20px;
+            margin-bottom: 15px;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            animation: fadeInUp 0.8s ease;
+        }
+
+        .card h3 {
+            font-size: 1.2em;
+            margin-bottom: 15px;
+            color: #00ffff;
+        }
+
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .metric-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #00ffff;
+        }
+
+        .metric-label {
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 6px 15px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+
+        .status-analyzing {
+            background: #ffd700;
+            color: #333;
+            animation: pulse 2s infinite;
+        }
+
+        .status-complete {
+            background: #00ff88;
+            color: #333;
+        }
+
+        .status-idle {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-top: 20px;
+        }
+
+        .alerts-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .alert-item {
+            background: rgba(255, 0, 0, 0.2);
+            border-left: 4px solid #ff4444;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            animation: slideIn 0.5s ease;
+        }
+
+        .alert-item.warning {
+            background: rgba(255, 165, 0, 0.2);
+            border-left-color: #ffa500;
+        }
+
+        .alert-item.info {
+            background: rgba(0, 255, 255, 0.2);
+            border-left-color: #00ffff;
+        }
+
+        .hotspot-item {
+            background: rgba(255, 0, 0, 0.15);
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border-left: 4px solid #ff0000;
+        }
+
+        .hotspot-severity {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+
+        .severity-critical {
+            background: #ff0000;
+            color: #fff;
+        }
+
+        .severity-high {
+            background: #ff6600;
+            color: #fff;
+        }
+
+        .severity-medium {
+            background: #ffa500;
+            color: #333;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 30px;
+            font-size: 1.2em;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid #00ffff;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        /* Voice Agent Styles */
+        .agent-section {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .agent-section h3 {
+            color: #00ffff;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+
+        .agent-instructions {
+            background: rgba(0, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #00ffff;
+            font-size: 0.95em;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .forecast-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .forecast-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .forecast-time {
+            font-size: 0.85em;
+            opacity: 0.8;
+            margin-bottom: 5px;
+        }
+
+        .forecast-value {
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+
+        .congestion-low { color: #00ff88; }
+        .congestion-medium { color: #ffa500; }
+        .congestion-high { color: #ff4444; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1> CityVision AI</h1>
+        <p>Real-time Traffic Intelligence with Predictive Analytics & Voice Agent</p>
+    </div>
+
+    <div class="container">
+        <!-- Control Panel -->
+        <div class="control-panel">
+            <h3 style="margin-bottom: 20px;">🎬 Analysis Controls</h3>
+            <div class="control-row">
+                <div class="input-group">
+                    <label>Video Path</label>
+                    <input type="text" id="videoPath" placeholder="/path/to/traffic/video.mp4">
+                </div>
+                <div class="input-group">
+                    <label>OpenAI API Key</label>
+                    <input type="password" id="apiKey" placeholder="sk-...">
+                </div>
+                <div class="input-group">
+                    <label>Sample Interval</label>
+                    <input type="number" id="sampleInterval" value="30" min="10" max="120">
+                </div>
+                <button class="btn btn-primary" id="startBtn" onclick="startAnalysis()">
+                    🚀 Start Analysis
+                </button>
+            </div>
+        </div>
+
+        <!-- Main Metrics -->
+        <div class="dashboard-grid">
+            <div class="card">
+                <h3>📊 Current Metrics</h3>
+                <div class="metric">
+                    <div>
+                        <div class="metric-label">Vehicles</div>
+                        <div class="metric-value" id="vehicleCount">0</div>
+                    </div>
+                </div>
+                <div class="metric">
+                    <div>
+                        <div class="metric-label">Pedestrians</div>
+                        <div class="metric-value" id="pedestrianCount">0</div>
+                    </div>
+                </div>
+                <div class="metric">
+                    <div>
+                        <div class="metric-label">Congestion</div>
+                        <div class="metric-value" id="congestionValue">0%</div>
+                    </div>
+                </div>
+                <div style="margin-top: 15px;">
+                    <span class="metric-label">Status: </span>
+                    <span class="status status-idle" id="status">Idle</span>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>📈 30-Min Congestion Forecast</h3>
+                <div class="chart-container">
+                    <canvas id="forecastChart"></canvas>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>🚨 Accident Hotspots</h3>
+                <div id="hotspotsList" class="alerts-list">
+                    <div class="loading">No hotspots detected yet</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>⚡ Quick Forecast</h3>
+                <div class="forecast-grid" id="quickForecast">
+                    <div class="forecast-item">
+                        <div class="forecast-time">5 min</div>
+                        <div class="forecast-value">--</div>
+                    </div>
+                    <div class="forecast-item">
+                        <div class="forecast-time">10 min</div>
+                        <div class="forecast-value">--</div>
+                    </div>
+                    <div class="forecast-item">
+                        <div class="forecast-time">15 min</div>
+                        <div class="forecast-value">--</div>
+                    </div>
+                    <div class="forecast-item">
+                        <div class="forecast-time">20 min</div>
+                        <div class="forecast-value">--</div>
+                    </div>
+                    <div class="forecast-item">
+                        <div class="forecast-time">25 min</div>
+                        <div class="forecast-value">--</div>
+                    </div>
+                    <div class="forecast-item">
+                        <div class="forecast-time">30 min</div>
+                        <div class="forecast-value">--</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recommendations -->
+        <div class="card">
+            <h3>💡 AI Recommendations & Signal Optimization</h3>
+            <div id="recommendations">
+                <div class="loading">Run analysis to get recommendations...</div>
+            </div>
+        </div>
+
+        <!-- Detailed Alerts -->
+        <div class="card">
+            <h3>⚠️ Real-time Alerts</h3>
+            <div id="alertsList" class="alerts-list">
+                <div class="loading">No alerts yet</div>
+            </div>
+        </div>
+
+        <!-- Voice Agent Section -->
+        <div class="agent-section">
+            <h3>🎙️ Talk to the Traffic Analysis Agent</h3>
+            <div class="agent-instructions">
+                <strong>How to use:</strong> 
+                <br>1. Run an analysis first (or the agent will tell you no data is available)
+                <br>2. Click "Copy Agent Context" to copy the analysis data
+                <br>3. Click the microphone in the agent widget below
+                <br>4. Paste the context as your first message
+                <br>5. Ask questions about traffic patterns, recommendations, and predictions!
+            </div>
+            <button class="btn btn-secondary" id="copyContextBtn" onclick="copyAgentContext()">
+                📋 Copy Agent Context
+            </button>
+            <elevenlabs-convai agent-id="agent_7101k7wzjb3vfrnvqdma7zp0p1qj"></elevenlabs-convai>
+        </div>
+    </div>
+
+    <script>
+        let forecastChart = null;
+        let updateInterval = null;
+        let isAnalyzing = false;
+        const API_BASE = 'http://localhost:5010';
+
+        // Test server connection on load
+        async function testConnection() {
+            try {
+                const response = await fetch(`${API_BASE}/api/test`);
+                const data = await response.json();
+                if (data.status === 'ok') {
+                    console.log('✅ Server connected:', data.message);
+                    addAlert('Server connected successfully!', 'info');
+                    return true;
+                }
+            } catch (error) {
+                console.error('❌ Server connection failed:', error);
+                addAlert('⚠️ Cannot connect to server. Make sure Flask is running on port 5001!', 'warning');
+                document.getElementById('startBtn').disabled = true;
+                return false;
+            }
+        }
+
+        // Initialize forecast chart
+        function initForecastChart() {
+            const ctx = document.getElementById('forecastChart').getContext('2d');
+            forecastChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Predicted Congestion %',
+                        data: [],
+                        borderColor: '#00ffff',
+                        backgroundColor: 'rgba(0, 255, 255, 0.1)',
+                        borderWidth: 3,
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: { color: '#fff' }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: { color: '#fff' },
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                        },
+                        x: {
+                            ticks: { color: '#fff' },
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                        }
                     }
-                ],
-                max_tokens=1500,
-                temperature=0.3
-            )
-            
-            analysis_text = response.choices[0].message.content
-            
-            # Extract JSON from response
-            try:
-                # Try to find JSON in the response
-                json_start = analysis_text.find('{')
-                json_end = analysis_text.rfind('}') + 1
-                if json_start != -1 and json_end > json_start:
-                    analysis_json = json.loads(analysis_text[json_start:json_end])
-                else:
-                    analysis_json = json.loads(analysis_text)
-                
-                return {
-                    'frame_number': frame_number,
-                    'timestamp': timestamp,
-                    'analysis': analysis_json,
-                    'raw_response': analysis_text,
-                    'success': True
                 }
-            except json.JSONDecodeError as e:
-                print(f"⚠️  JSON parse error for frame {frame_number}: {e}")
-                print(f"Response: {analysis_text[:200]}...")
-                return {
-                    'frame_number': frame_number,
-                    'timestamp': timestamp,
-                    'analysis': None,
-                    'raw_response': analysis_text,
-                    'success': False
-                }
+            });
+        }
+
+        // Copy agent context
+        async function copyAgentContext() {
+            try {
+                const response = await fetch(`${API_BASE}/api/agent-context`);
+                const data = await response.json();
                 
-        except Exception as e:
-            print(f"❌ AI analysis failed for frame {frame_number}: {str(e)}")
-            return None
-    
-    def analyze_video(self, sample_interval=30):
-        """
-        Analyze video by sampling frames at regular intervals
-        sample_interval: analyze every Nth frame (default 30 = ~1 per second for 30fps video)
-        """
-        print(f"Analyzing video: {self.video_path}")
-        print(f"Duration: {self.duration:.1f}s, FPS: {self.fps}, Total Frames: {self.total_frames}")
-        print(f"Sample Interval: Every {sample_interval} frames (~{sample_interval/self.fps:.1f}s)")
-        print("-" * 80)
-        
-        frame_count = 0
-        analyzed_count = 0
-        
-        while self.cap.isOpened():
-            ret, frame = self.cap.read()
-            if not ret:
-                break
-            
-            frame_count += 1
-            
-            # Sample frames at intervals
-            if frame_count % sample_interval == 0:
-                timestamp = frame_count / self.fps
-                print(f"\n🔍 Analyzing frame {frame_count}/{self.total_frames} (Time: {timestamp:.1f}s)")
-                
-                result = self.analyze_frame_with_ai(frame, frame_count, timestamp)
-                
-                if result and result['success']:
-                    self.frame_analyses.append(result)
-                    analyzed_count += 1
+                if (data.context) {
+                    await navigator.clipboard.writeText(data.context);
                     
-                    # Show quick summary
-                    analysis = result['analysis']
-                    print(f"   Vehicles: {analysis.get('vehicle_count', 'N/A')}, "
-                          f"Pedestrians: {analysis.get('pedestrian_count', 'N/A')}, "
-                          f"Congestion: {analysis.get('congestion_percent', 'N/A')}%, "
-                          f"Flow: {analysis.get('traffic_flow', 'N/A')}")
-                    print(f"   Risk Level: {analysis.get('risk_level', 'N/A').upper()}")
-                
-                progress = (frame_count / self.total_frames) * 100
-                print(f"   Progress: {progress:.1f}%")
-            
-            # Show progress every 100 frames
-            elif frame_count % 100 == 0:
-                progress = (frame_count / self.total_frames) * 100
-                print(f"Progress: {progress:.1f}% (Analyzed {analyzed_count} frames so far)")
-        
-        self.cap.release()
-        
-        print("\n" + "=" * 80)
-        print(f"Analysis Complete! Analyzed {analyzed_count} frames with AI")
-        print("=" * 80)
-        
-        # Calculate aggregated metrics
-        self._calculate_metrics()
-    
-    def _calculate_metrics(self):
-        """Calculate aggregated metrics from AI analyses"""
-        if not self.frame_analyses:
-            return
-        
-        vehicle_counts = []
-        pedestrian_counts = []
-        congestion_levels = []
-        
-        for result in self.frame_analyses:
-            if result['analysis']:
-                analysis = result['analysis']
-                
-                if 'vehicle_count' in analysis:
-                    vehicle_counts.append(analysis['vehicle_count'])
-                
-                if 'pedestrian_count' in analysis:
-                    pedestrian_counts.append(analysis['pedestrian_count'])
-                
-                if 'congestion_percent' in analysis:
-                    congestion_levels.append(analysis['congestion_percent'] / 100.0)
-        
-        self.vehicle_count = int(np.mean(vehicle_counts)) if vehicle_counts else 0
-        self.pedestrian_count = int(np.mean(pedestrian_counts)) if pedestrian_counts else 0
-        self.avg_congestion = np.mean(congestion_levels) if congestion_levels else 0
-        self.max_congestion = np.max(congestion_levels) if congestion_levels else 0
-        self.congestion_levels = congestion_levels
-    
-    def aggregate_insights(self):
-        """Aggregate all insights from AI analyses"""
-        all_safety_issues = []
-        all_infrastructure_issues = []
-        all_recommendations = []
-        all_immediate_actions = []
-        vehicle_types_total = defaultdict(int)
-        risk_levels = []
-        traffic_flows = []
-        
-        for result in self.frame_analyses:
-            if not result or not result['analysis']:
-                continue
-            
-            analysis = result['analysis']
-            
-            # Collect safety issues
-            if 'safety_issues' in analysis and analysis['safety_issues']:
-                all_safety_issues.extend(analysis['safety_issues'])
-            
-            # Collect infrastructure issues
-            if 'infrastructure_issues' in analysis and analysis['infrastructure_issues']:
-                all_infrastructure_issues.extend(analysis['infrastructure_issues'])
-            
-            # Collect recommendations
-            if 'recommendations' in analysis and analysis['recommendations']:
-                all_recommendations.extend(analysis['recommendations'])
-            
-            # Collect immediate actions
-            if 'immediate_actions' in analysis and analysis['immediate_actions']:
-                all_immediate_actions.extend(analysis['immediate_actions'])
-            
-            # Aggregate vehicle types
-            if 'vehicle_types' in analysis and isinstance(analysis['vehicle_types'], dict):
-                for vtype, count in analysis['vehicle_types'].items():
-                    vehicle_types_total[vtype] += count
-            
-            # Collect risk levels
-            if 'risk_level' in analysis:
-                risk_levels.append(analysis['risk_level'])
-            
-            # Collect traffic flows
-            if 'traffic_flow' in analysis:
-                traffic_flows.append(analysis['traffic_flow'])
-        
-        return {
-            'safety_issues': list(set(all_safety_issues)),
-            'infrastructure_issues': list(set(all_infrastructure_issues)),
-            'recommendations': list(set(all_recommendations)),
-            'immediate_actions': list(set(all_immediate_actions)),
-            'vehicle_types': dict(vehicle_types_total),
-            'risk_levels': risk_levels,
-            'traffic_flows': traffic_flows,
-            'frames_analyzed': len(self.frame_analyses)
+                    const btn = document.getElementById('copyContextBtn');
+                    btn.textContent = '✅ Copied! Paste in agent';
+                    btn.style.background = 'rgba(0, 255, 136, 0.3)';
+                    
+                    addAlert('✅ Context copied! Paste it in the voice agent to start.', 'info');
+                    
+                    setTimeout(() => {
+                        btn.textContent = '📋 Copy Agent Context';
+                        btn.style.background = 'rgba(255, 255, 255, 0.2)';
+                    }, 3000);
+                } else {
+                    addAlert('⚠️ No analysis data available yet. Run an analysis first!', 'warning');
+                }
+            } catch (error) {
+                console.error('Error copying context:', error);
+                addAlert('❌ Failed to copy context: ' + error.message, 'warning');
+            }
         }
-    
-    def generate_recommendations(self):
-        """Generate comprehensive recommendations based on AI analysis"""
-        insights = self.aggregate_insights()
-        issues = []
-        recommendations = []
-        
-        # Priority 1: Immediate safety actions from AI
-        if insights['immediate_actions']:
-            for action in insights['immediate_actions'][:5]:
-                issues.append({
-                    'type': 'IMMEDIATE SAFETY CONCERN',
-                    'severity': 'CRITICAL',
-                    'description': action
-                })
-                recommendations.append({
-                    'category': 'Immediate Action Required',
-                    'priority': 'CRITICAL',
-                    'suggestion': action,
-                    'impact': 'Address immediate safety hazard',
-                    'cost': 'Varies - Immediate attention required'
-                })
-        
-        # Priority 2: Safety issues from AI
-        if insights['safety_issues']:
-            for issue in insights['safety_issues'][:5]:
-                issues.append({
-                    'type': 'Safety Issue',
-                    'severity': 'HIGH',
-                    'description': issue
-                })
-        
-        # Priority 3: Infrastructure issues from AI
-        if insights['infrastructure_issues']:
-            for issue in insights['infrastructure_issues'][:5]:
-                issues.append({
-                    'type': 'Infrastructure Issue',
-                    'severity': 'MEDIUM',
-                    'description': issue
-                })
-        
-        # Priority 4: AI recommendations
-        if insights['recommendations']:
-            for rec in insights['recommendations'][:7]:
-                recommendations.append({
-                    'category': 'AI-Recommended Improvement',
-                    'priority': 'HIGH',
-                    'suggestion': rec,
-                    'impact': 'Based on detailed visual traffic analysis',
-                    'cost': 'See detailed cost estimate'
-                })
-        
-        # Add congestion-based recommendations
-        if self.avg_congestion > 0.7:
-            issues.append({
-                'type': 'High Congestion',
-                'severity': 'HIGH',
-                'description': f'Average congestion at {self.avg_congestion*100:.1f}% - Critical levels'
-            })
-            recommendations.append({
-                'category': 'Traffic Flow Management',
-                'priority': 'HIGH',
-                'suggestion': 'Deploy adaptive traffic light system with AI-based timing optimization',
-                'impact': 'Reduce congestion by 25-35%',
-                'cost': 'Medium-High ($75k-$150k)'
-            })
-        
-        # Risk assessment from AI
-        if insights['risk_levels']:
-            high_risk_count = sum(1 for r in insights['risk_levels'] if r in ['high', 'critical'])
-            if high_risk_count > len(insights['risk_levels']) * 0.3:
-                recommendations.append({
-                    'category': 'Safety Enhancement',
-                    'priority': 'CRITICAL',
-                    'suggestion': 'Implement comprehensive safety audit and immediate interventions',
-                    'impact': 'Significantly reduce accident risk',
-                    'cost': 'High ($50k-$200k depending on scope)'
-                })
-        
-        return issues, recommendations
-    
-    def get_congestion_rating(self):
-        """Get human-readable congestion rating"""
-        if self.avg_congestion < 0.3:
-            return 'LOW - Traffic flowing smoothly'
-        elif self.avg_congestion < 0.5:
-            return 'MODERATE - Some delays expected'
-        elif self.avg_congestion < 0.7:
-            return 'HIGH - Significant congestion present'
-        else:
-            return 'CRITICAL - Severe congestion, immediate action needed'
-    
-    def generate_summary(self, issues, recommendations):
-        """Generate executive summary"""
-        insights = self.aggregate_insights()
-        
-        if not issues:
-            summary = "AI analysis indicates traffic conditions are generally acceptable. "
-        else:
-            summary = f"AI-powered analysis identified {len(issues)} significant issue(s). "
-        
-        summary += f"Analyzed {insights['frames_analyzed']} frames across {self.duration:.1f} seconds of footage. "
-        summary += f"Traffic congestion level: {self.get_congestion_rating()}. "
-        
-        # Add traffic flow summary
-        if insights['traffic_flows']:
-            flow_summary = defaultdict(int)
-            for flow in insights['traffic_flows']:
-                flow_summary[flow] += 1
-            dominant_flow = max(flow_summary.items(), key=lambda x: x[1])[0]
-            summary += f"Dominant traffic flow state: {dominant_flow}. "
-        
-        summary += f"Generated {len(recommendations)} evidence-based recommendation(s)."
-        
-        return summary
-    
-    def generate_report(self):
-        """Generate comprehensive analysis report"""
-        issues, recommendations = self.generate_recommendations()
-        insights = self.aggregate_insights()
-        
-        report = {
-            'analysis_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'video_info': {
-                'path': self.video_path,
-                'duration_seconds': round(self.duration, 2),
-                'fps': self.fps,
-                'total_frames': self.total_frames,
-                'frames_analyzed': insights['frames_analyzed']
-            },
-            'metrics': {
-                'avg_vehicles_per_frame': self.vehicle_count,
-                'vehicle_type_distribution': insights['vehicle_types'],
-                'avg_pedestrians_per_frame': self.pedestrian_count,
-                'avg_congestion_level': round(self.avg_congestion, 3),
-                'max_congestion_level': round(self.max_congestion, 3),
-                'congestion_rating': self.get_congestion_rating()
-            },
-            'ai_insights': {
-                'safety_issues_detected': insights['safety_issues'],
-                'infrastructure_issues': insights['infrastructure_issues'],
-                'risk_level_distribution': dict(defaultdict(int, [(r, insights['risk_levels'].count(r)) for r in set(insights['risk_levels'])])),
-                'traffic_flow_states': insights['traffic_flows']
-            },
-            'issues_detected': issues,
-            'recommendations': recommendations,
-            'summary': self.generate_summary(issues, recommendations),
-            'detailed_frame_analyses': self.frame_analyses
+
+        async function startAnalysis() {
+            const videoPath = document.getElementById('videoPath').value;
+            const apiKey = document.getElementById('apiKey').value;
+            const sampleInterval = parseInt(document.getElementById('sampleInterval').value);
+
+            if (!videoPath) {
+                alert('❌ Please enter a video path');
+                return;
+            }
+
+            if (!apiKey) {
+                alert('❌ Please enter your OpenAI API key');
+                return;
+            }
+
+            const startBtn = document.getElementById('startBtn');
+            startBtn.disabled = true;
+            startBtn.textContent = '⏳ Starting...';
+
+            const requestData = {
+                video_path: videoPath,
+                api_key: apiKey,
+                sample_interval: sampleInterval
+            };
+
+            try {
+                const response = await fetch(`${API_BASE}/api/analyze`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(requestData)
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.error || `HTTP ${response.status}`);
+                }
+                
+                if (result.status === 'started') {
+                    document.getElementById('status').textContent = 'Analyzing';
+                    document.getElementById('status').className = 'status status-analyzing';
+                    isAnalyzing = true;
+                    startBtn.textContent = '⏳ Analyzing...';
+                    
+                    // Start polling for updates
+                    updateInterval = setInterval(updateDashboard, 2000);
+                    
+                    addAlert('✅ Analysis started successfully!', 'info');
+                } else {
+                    throw new Error(result.error || 'Unknown error');
+                }
+            } catch (error) {
+                alert('❌ Error: ' + error.message);
+                startBtn.disabled = false;
+                startBtn.textContent = '🚀 Start Analysis';
+                isAnalyzing = false;
+                
+                addAlert(`Failed to start: ${error.message}`, 'warning');
+            }
         }
-        
-        return report
-    
-    def print_report(self):
-        """Print formatted report to console"""
-        report = self.generate_report()
-        
-        print("\n" + "=" * 80)
-        print("AI-POWERED SMART TRAFFIC ANALYSIS REPORT".center(80))
-        print("=" * 80)
-        
-        print(f"\n📅 Analysis Date: {report['analysis_date']}")
-        print(f"🎥 Video: {report['video_info']['path']}")
-        print(f"⏱️  Duration: {report['video_info']['duration_seconds']}s")
-        print(f"🤖 AI Frames Analyzed: {report['video_info']['frames_analyzed']}")
-        
-        print("\n" + "-" * 80)
-        print("TRAFFIC METRICS (AI-DETECTED)".center(80))
-        print("-" * 80)
-        
-        metrics = report['metrics']
-        print(f"🚗 Average Vehicles per Frame: {metrics['avg_vehicles_per_frame']}")
-        
-        if metrics['vehicle_type_distribution']:
-            print(f"🚙 Vehicle Types Detected:")
-            for vtype, count in metrics['vehicle_type_distribution'].items():
-                print(f"   - {vtype.capitalize()}: {count}")
-        
-        print(f"🚶 Average Pedestrians per Frame: {metrics['avg_pedestrians_per_frame']}")
-        print(f"📊 Average Congestion Level: {metrics['avg_congestion_level']*100:.1f}%")
-        print(f"📈 Peak Congestion Level: {metrics['max_congestion_level']*100:.1f}%")
-        print(f"⚠️  Congestion Rating: {metrics['congestion_rating']}")
-        
-        # AI Insights
-        print("\n" + "-" * 80)
-        print("AI INSIGHTS & OBSERVATIONS".center(80))
-        print("-" * 80)
-        
-        ai_insights = report['ai_insights']
-        
-        if ai_insights['safety_issues_detected']:
-            print(f"\n🚨 Safety Issues Detected ({len(ai_insights['safety_issues_detected'])}):")
-            for i, issue in enumerate(ai_insights['safety_issues_detected'][:10], 1):
-                print(f"   {i}. {issue}")
-        
-        if ai_insights['infrastructure_issues']:
-            print(f"\n🏗️  Infrastructure Issues ({len(ai_insights['infrastructure_issues'])}):")
-            for i, issue in enumerate(ai_insights['infrastructure_issues'][:10], 1):
-                print(f"   {i}. {issue}")
-        
-        if ai_insights['risk_level_distribution']:
-            print(f"\n⚠️  Risk Level Distribution:")
-            for level, count in ai_insights['risk_level_distribution'].items():
-                print(f"   - {level.upper()}: {count} frames")
-        
-        # Issues
-        if report['issues_detected']:
-            print("\n" + "-" * 80)
-            print("ISSUES DETECTED".center(80))
-            print("-" * 80)
+
+        async function updateDashboard() {
+            try {
+                const metricsResponse = await fetch(`${API_BASE}/api/metrics`);
+                
+                if (!metricsResponse.ok) {
+                    throw new Error('Failed to fetch metrics');
+                }
+                
+                const metrics = await metricsResponse.json();
+
+                document.getElementById('vehicleCount').textContent = metrics.vehicles || 0;
+                document.getElementById('pedestrianCount').textContent = metrics.pedestrians || 0;
+                document.getElementById('congestionValue').textContent = `${metrics.congestion || 0}%`;
+
+                if (metrics.status === 'complete') {
+                    document.getElementById('status').textContent = 'Complete';
+                    document.getElementById('status').className = 'status status-complete';
+                    document.getElementById('startBtn').disabled = false;
+                    document.getElementById('startBtn').textContent = '🚀 Start Analysis';
+                    clearInterval(updateInterval);
+                    isAnalyzing = false;
+
+                    addAlert('✅ Analysis complete! You can now use the voice agent.', 'info');
+                    
+                    await loadPredictions();
+                }
+
+                const congestionEl = document.getElementById('congestionValue');
+                const congestion = metrics.congestion || 0;
+                if (congestion > 70) {
+                    congestionEl.className = 'metric-value congestion-high';
+                } else if (congestion > 40) {
+                    congestionEl.className = 'metric-value congestion-medium';
+                } else {
+                    congestionEl.className = 'metric-value congestion-low';
+                }
+
+            } catch (error) {
+                console.error('Error updating dashboard:', error);
+            }
+        }
+
+        async function loadPredictions() {
+            try {
+                const predResponse = await fetch(`${API_BASE}/api/predictions`);
+                
+                if (!predResponse.ok) {
+                    console.warn('Predictions not available yet');
+                    return;
+                }
+                
+                const predictions = await predResponse.json();
+
+                if (predictions.congestion_forecast && predictions.congestion_forecast.length > 0) {
+                    updateForecastChart(predictions.congestion_forecast);
+                    updateQuickForecast(predictions.congestion_forecast);
+                }
+
+                if (predictions.accident_hotspots && predictions.accident_hotspots.length > 0) {
+                    updateHotspots(predictions.accident_hotspots);
+                }
+
+                if (predictions.signal_optimization) {
+                    updateRecommendations(predictions);
+                }
+
+            } catch (error) {
+                console.error('Error loading predictions:', error);
+            }
+        }
+
+        function updateForecastChart(forecast) {
+            if (!forecastChart) return;
+
+            const labels = forecast.map(f => `${f.time_offset_minutes} min`);
+            const data = forecast.map(f => f.predicted_congestion);
+
+            forecastChart.data.labels = labels;
+            forecastChart.data.datasets[0].data = data;
+            forecastChart.update();
+        }
+
+        function updateQuickForecast(forecast) {
+            const container = document.getElementById('quickForecast');
+            const intervals = [4, 9, 14, 19, 24, 29];
+
+            let html = '';
+            intervals.forEach((idx, i) => {
+                if (forecast[idx]) {
+                    const value = Math.round(forecast[idx].predicted_congestion);
+                    let colorClass = 'congestion-low';
+                    if (value > 70) colorClass = 'congestion-high';
+                    else if (value > 40) colorClass = 'congestion-medium';
+
+                    html += `
+                        <div class="forecast-item">
+                            <div class="forecast-time">${(i + 1) * 5} min</div>
+                            <div class="forecast-value ${colorClass}">${value}%</div>
+                        </div>
+                    `;
+                }
+            });
+
+            container.innerHTML = html;
+        }
+
+        function updateHotspots(hotspots) {
+            const container = document.getElementById('hotspotsList');
             
-            for i, issue in enumerate(report['issues_detected'], 1):
-                print(f"\n{i}. [{issue['severity']}] {issue['type']}")
-                print(f"   {issue['description']}")
-        
-        # Recommendations
-        if report['recommendations']:
-            print("\n" + "-" * 80)
-            print("RECOMMENDATIONS".center(80))
-            print("-" * 80)
+            let html = '';
+            hotspots.forEach((hotspot, idx) => {
+                html += `
+                    <div class="hotspot-item">
+                        <strong>Hotspot ${idx + 1}</strong>
+                        <span class="hotspot-severity severity-${hotspot.severity}">
+                            ${hotspot.severity.toUpperCase()}
+                        </span>
+                        <div style="margin-top: 8px; opacity: 0.9;">
+                            ${hotspot.location}
+                        </div>
+                        <div style="margin-top: 5px; font-size: 0.9em;">
+                            Risk Score: <strong>${hotspot.risk_score}</strong>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html || '<div class="loading">No hotspots detected</div>';
+        }
+
+        function updateRecommendations(predictions) {
+            const container = document.getElementById('recommendations');
+            const signal = predictions.signal_optimization;
+
+            let html = '<div style="padding: 15px; background: rgba(0, 255, 136, 0.1); border-radius: 8px; border-left: 4px solid #00ff88;">';
             
-            for i, rec in enumerate(report['recommendations'], 1):
-                print(f"\n{i}. [{rec['priority']}] {rec['category']}")
-                print(f"   💡 {rec['suggestion']}")
-                print(f"   📊 Impact: {rec['impact']}")
-                print(f"   💰 Cost: {rec['cost']}")
-        
-        # Summary
-        print("\n" + "-" * 80)
-        print("EXECUTIVE SUMMARY".center(80))
-        print("-" * 80)
-        print(f"\n{report['summary']}")
-        
-        print("\n" + "=" * 80)
-        print("END OF REPORT".center(80))
-        print("=" * 80)
-    
-    def save_report(self, output_path='traffic_analysis_report.json'):
-        """Save report to JSON file"""
-        report = self.generate_report()
-        with open(output_path, 'w') as f:
-            json.dump(report, f, indent=2)
-        print(f"\n📄 Detailed report saved to: {output_path}")
+            if (signal) {
+                html += `
+                    <h4 style="color: #00ff88; margin-bottom: 10px;">🚦 Signal Timing Optimization</h4>
+                    <p><strong>Current Avg Congestion:</strong> ${signal.current_avg_congestion}%</p>
+                    <p><strong>Optimal Green Duration:</strong> ${signal.optimal_green_duration}s</p>
+                    <p><strong>Recommendation:</strong> ${signal.recommendation}</p>
+                    <p><strong>Expected Improvement:</strong> ${signal.expected_improvement}</p>
+                `;
+            }
 
+            html += '</div>';
+            container.innerHTML = html;
+        }
 
-def main():
-    """Main function"""
-    print("=" * 80)
-    print("AI-POWERED SMART TRAFFIC ANALYZER".center(80))
-    print("=" * 80)
-    
-    # Get OpenAI API key
-    api_key = input("\n🔑 Enter your OpenAI API key (or press Enter to use OPENAI_API_KEY env var): ").strip()
-    if not api_key:
-        api_key = os.getenv('OPENAI_API_KEY')
-        if not api_key:
-            print("❌ Error: OpenAI API key is required!")
-            print("Either provide it when prompted or set the OPENAI_API_KEY environment variable.")
-            return
-    
-    # Get video path
-    video_path = input("\n🎥 Enter the path to your MP4 traffic video: ").strip()
-    
-    # Get sample interval
-    print("\n⚙️  Sample Interval Configuration:")
-    print("   - Lower interval = More frames analyzed = More accurate but slower and more expensive")
-    print("   - Higher interval = Fewer frames analyzed = Faster and cheaper but less detailed")
-    print("   - Recommended: 30 (analyzes ~1 frame per second for 30fps video)")
-    
-    sample_input = input("   Enter sample interval (press Enter for default 30): ").strip()
-    sample_interval = int(sample_input) if sample_input.isdigit() else 30
-    
-    # Initialize analyzer
-    try:
-        print(f"\n🔧 Initializing analyzer with OpenAI API...")
-        analyzer = TrafficAnalyzer(video_path, openai_api_key=api_key)
-    except Exception as e:
-        print(f"\n❌ Error: {str(e)}")
-        return
-    
-    # Analyze video
-    print("\n🔍 Starting AI-powered analysis...")
-    print("⏳ This may take several minutes depending on video length...")
-    print()
-    
-    try:
-        analyzer.analyze_video(sample_interval=sample_interval)
-    except Exception as e:
-        print(f"\n❌ Analysis error: {str(e)}")
-        return
-    
-    # Print report
-    analyzer.print_report()
-    
-    # Save report
-    save_option = input("\n💾 Save detailed report to JSON file? (y/n): ").strip().lower()
-    if save_option == 'y':
-        filename = input("Enter filename (default: traffic_analysis_report.json): ").strip()
-        if not filename:
-            filename = 'traffic_analysis_report.json'
-        analyzer.save_report(filename)
-    
-    print("\n✅ Analysis complete!")
-    print(f"📊 Total OpenAI API calls made: {len(analyzer.frame_analyses)}")
+        function addAlert(message, type = 'info') {
+            const container = document.getElementById('alertsList');
+            
+            if (container.querySelector('.loading')) {
+                container.innerHTML = '';
+            }
 
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert-item ${type}`;
+            alertDiv.innerHTML = `
+                <div style="font-weight: 600; margin-bottom: 5px;">
+                    ${type === 'info' ? '💡' : type === 'warning' ? '⚠️' : '🚨'} 
+                    ${type.toUpperCase()}
+                </div>
+                <div>${message}</div>
+                <div style="font-size: 0.85em; opacity: 0.7; margin-top: 5px;">
+                    ${new Date().toLocaleTimeString()}
+                </div>
+            `;
+            
+            container.insertBefore(alertDiv, container.firstChild);
 
-if __name__ == "__main__":
-    main()
+            while (container.children.length > 10) {
+                container.removeChild(container.lastChild);
+            }
+        }
+
+        // Initialize
+        window.onload = async function() {
+            console.log('🚀 Dashboard loading...');
+            initForecastChart();
+            
+            const connected = await testConnection();
+            
+            if (connected) {
+                updateDashboard();
+            }
+        };
+    </script>
+</body>
+</html>
